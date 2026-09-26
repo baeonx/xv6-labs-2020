@@ -186,6 +186,19 @@ w_mtvec(uint64 x)
 
 #define MAKE_SATP(pagetable) (SATP_SV39 | (((uint64)pagetable) >> 12))
 
+// Physical Memory Protection
+static inline void
+w_pmpcfg0(uint64 x)
+{
+  asm volatile("csrw pmpcfg0, %0" : : "r"(x));
+}
+
+static inline void
+w_pmpaddr0(uint64 x)
+{
+  asm volatile("csrw pmpaddr0, %0" : : "r"(x));
+}
+
 // supervisor address translation and protection;
 // holds the address of the page table.
 static inline void 
