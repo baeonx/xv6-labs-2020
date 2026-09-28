@@ -19,6 +19,7 @@ main(int argc, char *argv[])
   int z[2];
   pipe(f);
   pipe(z);
+  // 要先创建管道再fork,这样才能两个进程共享管道
   int pid = fork();
   if(pid == 0)
   {

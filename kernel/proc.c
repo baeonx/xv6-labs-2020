@@ -50,6 +50,7 @@ procinit(void)
 int
 cpuid()
 {
+  // r_tp拿到当前 CPU 的核心编号
   int id = r_tp();
   return id;
 }
@@ -59,6 +60,7 @@ cpuid()
 struct cpu*
 mycpu(void) {
   int id = cpuid();
+  // 一个数组，根据cpuid来放置cpu本身
   struct cpu *c = &cpus[id];
   return c;
 }
@@ -66,9 +68,11 @@ mycpu(void) {
 // Return the current struct proc *, or zero if none.
 struct proc*
 myproc(void) {
+  // 关中断
   push_off();
   struct cpu *c = mycpu();
   struct proc *p = c->proc;
+  // 开中断
   pop_off();
   return p;
 }
@@ -502,17 +506,23 @@ sched(void)
 {
   int intena;
   struct proc *p = myproc();
-
+  // 检查当前cpu是否持有该锁
   if(!holding(&p->lock))
     panic("sched p->lock");
+  // 确保调度前"只关了一层中断、只拿着一把锁"
+  // mycpu() == 0中断开着就不行，不开中断就调度，打乱本身过程了
+  // mycpu > 1说明有多重中断也不行，会导致死锁
   if(mycpu()->noff != 1)
     panic("sched locks");
+  // 
   if(p->state == RUNNING)
     panic("sched running");
+  // mycpu->noff说明有一层关中断，但是再看看关中断的状态是否真的开着
   if(intr_get())
     panic("sched interruptible");
-
+  // 如果当前cpu切换到别的进程，别的进程可能会修改中断的值
   intena = mycpu()->intena;
+  // cpu->context 就是调度器的"存档点"，切回来时从这里继续。
   swtch(&p->context, &mycpu()->context);
   mycpu()->intena = intena;
 }
@@ -554,6 +564,8 @@ forkret(void)
 void
 sleep(void *chan, struct spinlock *lk)
 {
+  // lk是一把&tickslock的自旋锁
+  // 获得当前cpu负责的进程
   struct proc *p = myproc();
   
   // Must acquire p->lock in order to
@@ -562,13 +574,19 @@ sleep(void *chan, struct spinlock *lk)
   // guaranteed that we won't miss any wakeup
   // (wakeup locks p->lock),
   // so it's okay to release lk.
+  // 先拿 p->lock 护住，再放掉调用者的锁。
+  // 锁的传递
+  // 如果当前p->lock的锁不是tickslock的锁就把tickslock的锁换成该进程的cpu在占有
   if(lk != &p->lock){  //DOC: sleeplock0
     acquire(&p->lock);  //DOC: sleeplock1
     release(lk);
   }
 
   // Go to sleep.
+  // chan表示这个进程在等 ticks 这个事件
+  // 传入的是ticks这个数的地址
   p->chan = chan;
+  // state是用于存储进程的状态
   p->state = SLEEPING;
 
   sched();
@@ -593,7 +611,7 @@ wakeup(void *chan)
   for(p = proc; p < &proc[NPROC]; p++) {
     acquire(&p->lock);
     if(p->state == SLEEPING && p->chan == chan) {
-      p->state = RUNNABLE;
+      p->state = RUNNABLE; // ← 无脑唤醒，不判断"睡够没"
     }
     release(&p->lock);
   }

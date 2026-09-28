@@ -35,6 +35,14 @@ static uint64
 argraw(int n)
 {
   struct proc *p = myproc();
+  // 用户程序调用 read(fd, buf, n)
+  // 编译后大致是：
+  // a0 = fd      // 第 1 个参数
+  // a1 = buf     // 第 2 个参数
+  // a2 = n       // 第 3 个参数
+  // a7 = SYS_read // 系统调用号
+  // ecall        // 陷入内核
+  // mmap(addr, len, prot, flags, fd, off)	6 个	✅ 用到 a0~a5
   switch (n) {
   case 0:
     return p->trapframe->a0;
@@ -57,6 +65,9 @@ argraw(int n)
 int
 argint(int n, int *ip)
 {
+  // sys_sleep, (n=0, ip只是一个传回的值) 
+  // n=0成功返回就是ip=p->trapframe->a0也就是第一个参数,返回失败是 panic
+  // sleep(5); p->trapframe->a0=5
   *ip = argraw(n);
   return 0;
 }

@@ -3,6 +3,7 @@
 #include "kernel/fcntl.h"
 #include "user/user.h"
 
+// 把t赋值给s
 char*
 strcpy(char *s, const char *t)
 {
@@ -14,6 +15,7 @@ strcpy(char *s, const char *t)
   return os;
 }
 
+// 看p, q除了前缀的公共部分后，第一个不同的字符相差了什么
 int
 strcmp(const char *p, const char *q)
 {
@@ -22,6 +24,7 @@ strcmp(const char *p, const char *q)
   return (uchar)*p - (uchar)*q;
 }
 
+// 得到字符串s的长度
 uint
 strlen(const char *s)
 {
@@ -32,6 +35,7 @@ strlen(const char *s)
   return n;
 }
 
+// 在dst指向的空间中，填满长度为n的c数字
 void*
 memset(void *dst, int c, uint n)
 {
@@ -43,15 +47,18 @@ memset(void *dst, int c, uint n)
   return dst;
 }
 
+// 例如：char*s = "hello"首地址
+// 看看hello里面有没有个字符等于char c
 char*
 strchr(const char *s, char c)
 {
-  for(; *s; s++)
+  for(; *s; s++) // 遍历，直到遇到 '\0'（*s == 0 时结束）
     if(*s == c)
       return (char*)s;
   return 0;
 }
 
+// 从终端读取max个字符到buf
 char*
 gets(char *buf, int max)
 {
@@ -84,6 +91,8 @@ stat(const char *n, struct stat *st)
   return r;
 }
 
+// 0到9的字符变成整个数字
+// '9999'变成9999
 int
 atoi(const char *s)
 {
@@ -95,6 +104,7 @@ atoi(const char *s)
   return n;
 }
 
+// 将vsrc的数据复制到vdst，
 void*
 memmove(void *vdst, const void *vsrc, int n)
 {
@@ -103,10 +113,15 @@ memmove(void *vdst, const void *vsrc, int n)
 
   dst = vdst;
   src = vsrc;
+  
   if (src > dst) {
+    // 如果src在dst后面
+    //  将vsrc后n个的内容赋值给vdst后n个内容
     while(n-- > 0)
       *dst++ = *src++;
   } else {
+    // 如果src在dst前面
+    // 
     dst += n;
     src += n;
     while(n-- > 0)

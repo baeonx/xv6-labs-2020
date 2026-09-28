@@ -7,6 +7,8 @@
 #include "defs.h"
 
 struct spinlock tickslock;
+// clockintr()
+// 全局时钟
 uint ticks;
 
 extern char trampoline[], uservec[], userret[];
@@ -159,6 +161,7 @@ kerneltrap()
   w_sstatus(sstatus);
 }
 
+// 每次时钟中断，内核就 +1
 void
 clockintr()
 {

@@ -19,6 +19,8 @@ static inline uint64
 r_mstatus()
 {
   uint64 x;
+  // 类似read(x, mstatus)
+  // 这里的%0代指的的是存着x的寄存器
   asm volatile("csrr %0, mstatus" : "=r" (x) );
   return x;
 }
@@ -26,6 +28,7 @@ r_mstatus()
 static inline void 
 w_mstatus(uint64 x)
 {
+  // 类似write(mstatus, x)
   asm volatile("csrw mstatus, %0" : : "r" (x));
 }
 
@@ -57,6 +60,8 @@ r_sstatus()
 static inline void 
 w_sstatus(uint64 x)
 {
+  // 类似于write(sstatus, x)
+  // 将x的状态写入sstatus
   asm volatile("csrw sstatus, %0" : : "r" (x));
 }
 
@@ -281,10 +286,12 @@ intr_on()
 static inline void
 intr_off()
 {
+  // 只把 SIE 位清零，其它所有位原样保留。
   w_sstatus(r_sstatus() & ~SSTATUS_SIE);
 }
 
 // are device interrupts enabled?
+// SSTATUS_SIE位：S模式（操作系统内核）的中断使能，位置是否能够中断
 static inline int
 intr_get()
 {
@@ -306,6 +313,10 @@ static inline uint64
 r_tp()
 {
   uint64 x;
+  // mv rd, rs
+  // mv x, tp，第一个是目的地，第二个是来源
+  // 将tp的值move到x当中
+  // RISC-V里tp（thread pointer）寄存器通常存放当前 CPU 的核心编号（hartid）
   asm volatile("mv %0, tp" : "=r" (x) );
   return x;
 }

@@ -19,11 +19,15 @@ struct context {
 };
 
 // Per-CPU state.
+// 因为中断状态是每个 CPU 独立的
 struct cpu {
   struct proc *proc;          // The process running on this cpu, or null.
   struct context context;     // swtch() here to enter scheduler().
+                              // cpu->context 就是调度器的"存档点"，切回来时从这里继续。
   int noff;                   // Depth of push_off() nesting.
+                              // 记录关了几层，只有减到 0 才真正开中断
   int intena;                 // Were interrupts enabled before push_off()?
+                              // 记录第一个关中断当时CPU的中断状态
 };
 
 extern struct cpu cpus[NCPU];

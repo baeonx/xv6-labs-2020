@@ -1,0 +1,18 @@
+{
+    "configurations": [
+        {
+            "name": "xv6",
+            "compilerPath": "/usr/bin/riscv64-linux-gnu-gcc",
+            "includePath": [
+                "${workspaceFolder}",
+                "${workspaceFolder}/kernel",
+                "${workspaceFolder}/user",
+                "${workspaceFolder}/mkfs"
+            ],
+            "defines": [],
+            "cStandard": "c17",
+            "intelliSenseMode": "linux-gcc-x64"
+        }
+    ],
+    "version": 4
+}
