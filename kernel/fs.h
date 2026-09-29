@@ -54,7 +54,14 @@ struct dinode {
 #define DIRSIZ 14
 
 struct dirent {
-  ushort inum;
-  char name[DIRSIZ];
+  ushort inum; // inode 号
+  char name[DIRSIZ]; // 一个目录项就是一个名字
 };
+// read(fd, &de, sizeof(de))就是读取目录项里面的内容
+// ┌─────────────────────────┐
+// │ dirent 0: inum=1, name="."    │ ← 指向自己
+// │ dirent 1: inum=1, name=".."   │ ← 指向父目录
+// │ dirent 2: inum=5, name="a"    │
+// │ dirent 3: inum=6, name="c.txt"│
+// └─────────────────────────┘
 

@@ -3,7 +3,7 @@
 #include "kernel/fcntl.h"
 #include "user/user.h"
 
-// 把t赋值给s
+// 把t赋值给s, 
 char*
 strcpy(char *s, const char *t)
 {
@@ -77,12 +77,22 @@ gets(char *buf, int max)
   return buf;
 }
 
+// ls里面用到了
+// struct stat {
+//   int dev;     // File system's disk device 文件系统所在的磁盘设备号
+//   uint ino;    // Inode number inode 编号
+//   short type;  // Type of file 文件类型（T_DIR/T_FILE/T_DEVICE）
+//   short nlink; // Number of links to file 硬链接数
+//   uint64 size; // Size of file in bytes 文件大小（字节）
+// };
+// stat(buf, &st) 
+// buf是dir/a.txt, dir1/dir2/
 int
 stat(const char *n, struct stat *st)
 {
   int fd;
   int r;
-
+  // 打开该buf文件路径的文件
   fd = open(n, O_RDONLY);
   if(fd < 0)
     return -1;
@@ -104,7 +114,7 @@ atoi(const char *s)
   return n;
 }
 
-// 将vsrc的数据复制到vdst，
+// 将vsrc的数据拼接到vdst到
 void*
 memmove(void *vdst, const void *vsrc, int n)
 {
@@ -121,7 +131,6 @@ memmove(void *vdst, const void *vsrc, int n)
       *dst++ = *src++;
   } else {
     // 如果src在dst前面
-    // 
     dst += n;
     src += n;
     while(n-- > 0)
