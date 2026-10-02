@@ -53,7 +53,6 @@ void find(char* path, char* file)
         return;
     }
     
-    
     if(st.type == T_DIR){
         // 文件地址 当前目录path + '/' + 文件名长度 + '\0' > size of buf
         if(strlen(path) + 1 + DIRSIZ + 1 > sizeof buf){

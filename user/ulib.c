@@ -47,8 +47,7 @@ memset(void *dst, int c, uint n)
   return dst;
 }
 
-// 例如：char*s = "hello"首地址
-// 看看hello里面有没有个字符等于char c
+// 看看c里面是否含有s里的切片
 char*
 strchr(const char *s, char c)
 {
