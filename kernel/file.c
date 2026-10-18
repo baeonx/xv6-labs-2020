@@ -94,6 +94,9 @@ filestat(struct file *f, uint64 addr)
     ilock(f->ip);
     stati(f->ip, &st);
     iunlock(f->ip);
+    // filestat(fd=0的file,fd=1) 在fd=0对应的file，以及fd=1对应的用户空间地址
+    // copyout函数将内核空间的数据复制到用户空间
+    // p->pagetable是当前进程的页表，addr是用户空间的
     if(copyout(p->pagetable, addr, (char *)&st, sizeof(st)) < 0)
       return -1;
     return 0;

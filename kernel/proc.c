@@ -756,3 +756,20 @@ procdump(void)
     printf("\n");
   }
 }
+
+
+uint64
+collectProcessCount(void)
+{
+  uint64 count = 0;
+  struct proc *p;
+  
+  for(p = proc; p < &proc[NPROC]; p++) {
+    acquire(&p->lock); // 加锁
+    if(p->state != UNUSED) {
+      count++; // 统计已使用的进程数量
+    }
+    release(&p->lock); // 解锁
+  }
+  return count;
+}

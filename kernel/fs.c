@@ -448,6 +448,7 @@ itrunc(struct inode *ip)
 
 // Copy stat information from inode.
 // Caller must hold ip->lock.
+// 克隆inode的元信息到st
 void
 stati(struct inode *ip, struct stat *st)
 {

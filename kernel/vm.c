@@ -421,17 +421,23 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
   uint64 n, va0, pa0;
 
   while(len > 0){
+    // PGROUNDDOWN(dstva) 将 dstva 向下对齐到页边界，得到该页的起始虚拟地址 va0
     va0 = PGROUNDDOWN(dstva);
+    // 拿到va0对应的物理地址pa0
     pa0 = walkaddr(pagetable, va0);
     if(pa0 == 0)
       return -1;
+    // dstva-va0 是 dstva 在物理页的页内偏移量，PGSIZE - (dstva - va0) 就是从 dstva 到该页末尾的字节数
     n = PGSIZE - (dstva - va0);
+    // 剩余长度 len 可能小于该页剩余空间 n，如果是这样，就只拷贝 len 个字节
     if(n > len)
       n = len;
+    // memmove 将 src 的 n 个字节拷贝到物理地址 pa0 + (dstva - va0) 处
     memmove((void *)(pa0 + (dstva - va0)), src, n);
 
     len -= n;
     src += n;
+    // 在用户虚拟地址空间里把游标挪到下一页，看作上一页已经被填满了
     dstva = va0 + PGSIZE;
   }
   return 0;

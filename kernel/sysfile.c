@@ -18,18 +18,23 @@
 
 // Fetch the nth word-sized system call argument as a file descriptor
 // and return both the descriptor and the corresponding struct file.
+// argint(0,0,&f) 获取当前进程的第0个参数对应的fd，并返回对应的struct file结构体
 static int
 argfd(int n, int *pfd, struct file **pf)
 {
   int fd;
   struct file *f;
 
+  // argint(n, &fd) 获取当前进程的第n个参数对应的fd
   if(argint(n, &fd) < 0)
     return -1;
+  // myproc()->ofile[fd] 获取当前进程的第fd个文件描述符对应的struct file结构体
   if(fd < 0 || fd >= NOFILE || (f=myproc()->ofile[fd]) == 0)
     return -1;
+  // pfd 是一个指向 int 的指针，如果 pfd 不为 NULL，则将 fd 赋值给 *pfd，这样调用者就可以获取到对应的 fd
   if(pfd)
     *pfd = fd;
+  // pf 是一个指向 struct file* 的指针，如果 pf 不为 NULL，则将 f 赋值给 *pf，这样调用者就可以获取到对应的 struct file 结构体
   if(pf)
     *pf = f;
   return 0;
@@ -109,7 +114,8 @@ sys_fstat(void)
 {
   struct file *f;
   uint64 st; // user pointer to struct stat
-
+  // argint(0,0,&f) 获取当前进程的第0个参数对应的fd，并返回对应的struct file结构体
+  // argaddr(1, &st) 获取当前进程的第1个参数对应的用户空间地址，并将其存储在 st 中
   if(argfd(0, 0, &f) < 0 || argaddr(1, &st) < 0)
     return -1;
   return filestat(f, st);

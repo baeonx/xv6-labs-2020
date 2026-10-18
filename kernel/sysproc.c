@@ -6,6 +6,7 @@
 #include "memlayout.h"
 #include "spinlock.h"
 #include "proc.h"
+#include "sysinfo.h"
 
 uint64
 sys_exit(void)
@@ -103,5 +104,19 @@ sys_trace(void)
   if(argint(0, &mask) < 0)   // 取参数
     return -1;
   myproc()->tracedmask = mask;  // 记住它(存在当前进程里)
+  return 0;
+}
+
+uint64
+sys_sysinfo(void)
+{
+  struct sysinfo info;
+  uint64 st; // user pointer to struct stat
+  info.freemem = collectFreePages() * PGSIZE;
+  info.nproc = collectProcessCount();
+  if(argaddr(0, &st) < 0)
+    return -1;
+  if(copyout(myproc()->pagetable, st, (char *)&info, sizeof(info)) < 0)
+    return -1;
   return 0;
 }
