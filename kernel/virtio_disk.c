@@ -31,7 +31,9 @@ static struct disk {
   struct UsedArea *used;
 
   // our own book-keeping.
+  // 一次磁盘操作要 3 个，所以：最多同时 2 次操作（6 个描述符）。剩下 2 个不够，得等
   char free[NUM];  // is a descriptor free?
+  
   uint16 used_idx; // we've looked this far in used[2..NUM].
 
   // track info about in-flight operations,
@@ -157,6 +159,7 @@ alloc3_desc(int *idx)
   for(int i = 0; i < 3; i++){
     idx[i] = alloc_desc();
     if(idx[i] < 0){
+      // 分配失败全部舍去然后返回
       for(int j = 0; j < i; j++)
         free_desc(idx[j]);
       return -1;
@@ -168,9 +171,11 @@ alloc3_desc(int *idx)
 void
 virtio_disk_rw(struct buf *b, int write)
 {
-  uint64 sector = b->blockno * (BSIZE / 512);
+  // write == 1写磁盘 write == 0读磁盘
+  // 一个块 = 2 个扇区
+  uint64 sector = b->blockno * (BSIZE / 512); // 1024/512=2 → 块号×2 = 扇区号
 
-  acquire(&disk.vdisk_lock);
+  acquire(&disk.vdisk_lock);  // 拿自旋锁,独占 virtio 环
 
   // the spec says that legacy block operations use three
   // descriptors: one for type/reserved/sector, one for
@@ -182,6 +187,8 @@ virtio_disk_rw(struct buf *b, int write)
     if(alloc3_desc(idx) == 0) {
       break;
     }
+    // chan是个等待的条件，chan 是"睡眠在哪个条件上"的标识
+    // 只是一个标识
     sleep(&disk.free[0], &disk.vdisk_lock);
   }
   

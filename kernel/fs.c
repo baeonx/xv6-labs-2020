@@ -239,21 +239,26 @@ iupdate(struct inode *ip)
 // Find the inode with number inum on device dev
 // and return the in-memory copy. Does not lock
 // the inode and does not read it from disk.
+// 拿到指定 inode 的"内存中的 inode 结构"
 static struct inode*
 iget(uint dev, uint inum)
 {
   struct inode *ip, *empty;
-
+  // icache 是 inode 缓存（全局）,所有CPU共享
   acquire(&icache.lock);
 
   // Is the inode already cached?
   empty = 0;
   for(ip = &icache.inode[0]; ip < &icache.inode[NINODE]; ip++){
+    // ip-ref: 引用计数
+    // dev: 设备号
+    // inum: inode号
     if(ip->ref > 0 && ip->dev == dev && ip->inum == inum){
       ip->ref++;
       release(&icache.lock);
       return ip;
     }
+    // 记录第一个空槽位
     if(empty == 0 && ip->ref == 0)    // Remember empty slot.
       empty = ip;
   }
@@ -285,6 +290,7 @@ idup(struct inode *ip)
 
 // Lock the given inode.
 // Reads the inode from disk if necessary.
+// 给 inode 加锁，并在需要时从磁盘读取 inode 数据到内存
 void
 ilock(struct inode *ip)
 {
@@ -294,9 +300,13 @@ ilock(struct inode *ip)
   if(ip == 0 || ip->ref < 1)
     panic("ilock");
 
+  // 这把睡眠锁保护了inode
+  // 内存里的 inode 结构
+  // 因为更改inode通常是和磁盘更改挂钩的，所以需要睡眠锁
   acquiresleep(&ip->lock);
 
   if(ip->valid == 0){
+    // IBLOCK计算这个inode的起始磁盘块号
     bp = bread(ip->dev, IBLOCK(ip->inum, sb));
     dip = (struct dinode*)bp->data + ip->inum%IPB;
     ip->type = dip->type;
@@ -598,21 +608,26 @@ skipelem(char *path, char *name)
 {
   char *s;
   int len;
-
+  // 去掉path的开头的'/'
   while(*path == '/')
     path++;
   if(*path == 0)
     return 0;
+  // 记录目前路径的第一个字母
   s = path;
+  // 把path移动到下一个 "/"
   while(*path != '/' && *path != 0)
     path++;
+  // 计算path与该路径的第一个字母的长度
   len = path - s;
   if(len >= DIRSIZ)
+    // 超过就截断处理
     memmove(name, s, DIRSIZ);
   else {
     memmove(name, s, len);
     name[len] = 0;
   }
+  // 再把path从 '/' 往后移去
   while(*path == '/')
     path++;
   return path;
@@ -622,16 +637,23 @@ skipelem(char *path, char *name)
 // If parent != 0, return the inode for the parent and copy the final
 // path element into name, which must have room for DIRSIZ bytes.
 // Must be called inside a transaction since it calls iput().
+// 按路径查找 inode
 static struct inode*
 namex(char *path, int nameiparent, char *name)
 {
   struct inode *ip, *next;
 
+  // 返回一个inode
   if(*path == '/')
-    ip = iget(ROOTDEV, ROOTINO);
+    // dev == 1, inum == 1
+    // 从inode数组中挑选一个没用的出来
+    ip = iget(ROOTDEV, ROOTINO); // 绝对路径，从根开始
   else
-    ip = idup(myproc()->cwd);
+    // 存在具体的path，直接给inode的引用计数ref+1
+    ip = idup(myproc()->cwd); // 相对路径，从当前目录开始
 
+  // skipelem例：/home/cpp
+  // 第一个skiplem后 name = home, path = cpp
   while((path = skipelem(path, name)) != 0){
     ilock(ip);
     if(ip->type != T_DIR){

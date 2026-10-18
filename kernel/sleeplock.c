@@ -18,11 +18,15 @@ initsleeplock(struct sleeplock *lk, char *name)
   lk->pid = 0;
 }
 
+// 和自旋锁不同，睡眠锁获取不到会睡眠（让出 CPU）
+// 因为读磁盘慢，不能忙等
 void
 acquiresleep(struct sleeplock *lk)
 {
+  // 加自旋锁
   acquire(&lk->lk);
   while (lk->locked) {
+    // lk是睡眠锁  lk->lk是自旋锁
     sleep(lk, &lk->lk);
   }
   lk->locked = 1;

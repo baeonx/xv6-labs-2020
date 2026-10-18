@@ -53,6 +53,24 @@
 
 // map kernel stacks beneath the trampoline,
 // each surrounded by invalid guard pages.
+// 最上面空了点避免符号扩展
+// 地址增大 ↑
+// MAXVA  ─────────────────────────  ← TRAMPOLINE 页的顶边 = MAXVA
+//         │   TRAMPOLINE 页        │   [MAXVA-PGSIZE, MAXVA)
+// TRAMPOLINE ─────────────────────  ← 起始(低)地址 = MAXVA - PGSIZE = TRAMPOLINE
+//         │   TRAPFRAME 页         │   [MAXVA-2PGSIZE, MAXVA-PGSIZE)
+// TRAPFRAME ──────────────────────  ← = MAXVA - 2*PGSIZE
+//         │   进程0 内核栈          │   [MAXVA-3PGSIZE, MAXVA-2PGSIZE)
+// KSTACK(0) ──────────────────────  ← = MAXVA - 3*PGSIZE = TRAMPOLINE - 2*PGSIZE
+//         │   保护页(不映射)        │   [MAXVA-4PGSIZE, MAXVA-3PGSIZE)
+//         ├───────────────────────┤
+//         │   进程1 内核栈          │   [MAXVA-5PGSIZE, MAXVA-4PGSIZE)
+// KSTACK(1) ──────────────────────  ← = MAXVA - 5*PGSIZE = TRAMPOLINE - 4*PGSIZE
+//         │   保护页(不映射)        │
+//         │        ...            │
+// 地址减小 ↓
+
+// 假设p = 0， trampoline - 2（PGSIZE，跳过了TRAMPOLINE与TRAPFRAME
 #define KSTACK(p) (TRAMPOLINE - ((p)+1)* 2*PGSIZE)
 
 // User memory layout.

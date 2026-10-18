@@ -47,18 +47,22 @@ void
 kfree(void *pa)
 {
   struct run *r;
-
+  // 页对齐（地址是 4096 的倍数）
+  // 不小于内核末尾 end（不能释放内核代码/数据）
+  // 小于物理内存末尾（不能释放超出内存的地址）
   if(((uint64)pa % PGSIZE) != 0 || (char*)pa < end || (uint64)pa >= PHYSTOP)
     panic("kfree");
 
   // Fill with junk to catch dangling refs.
+  // 如果有人还拿着这页的指针，在释放后访问，会读到 0x01010101。
   memset(pa, 1, PGSIZE);
 
+  // 空闲页头指针
   r = (struct run*)pa;
 
   acquire(&kmem.lock);
-  r->next = kmem.freelist;
-  kmem.freelist = r;
+  r->next = kmem.freelist; // 新页的 next 指向原来的头
+  kmem.freelist = r; // freelist 指向新页
   release(&kmem.lock);
 }
 
@@ -71,12 +75,20 @@ kalloc(void)
   struct run *r;
 
   acquire(&kmem.lock);
+  // 从空闲链表取一页
   r = kmem.freelist;
+  // 如果有空闲页直接取一夜
+  // 页A -> 页B -> 0
   if(r)
-    kmem.freelist = r->next;
+    kmem.freelist = r->next; // freelist 指向页B（页A的 next）
   release(&kmem.lock);
 
+  // 取出来了r空闲页
+  // 为什么填垃圾：帮助发现 bug
+  // 如果程序没初始化就用这页，会读到 0x05050505，一看就知道是垃圾
   if(r)
     memset((char*)r, 5, PGSIZE); // fill with junk
+  
+  // 返回这页的地址
   return (void*)r;
 }

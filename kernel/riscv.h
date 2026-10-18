@@ -8,7 +8,7 @@ r_mhartid()
 }
 
 // Machine Status Register, mstatus
-
+// 定义longlong变量存储3(11)(二进制数)，将3左移11位
 #define MSTATUS_MPP_MASK (3L << 11) // previous mode.
 #define MSTATUS_MPP_M (3L << 11)
 #define MSTATUS_MPP_S (1L << 11)
@@ -183,7 +183,13 @@ w_mtvec(uint64 x)
 
 // use riscv's sv39 page table scheme.
 #define SATP_SV39 (8L << 60)
-
+// satp 里放什么
+//  63        60 59        44 43                12 11      0
+// ┌───────────┬─────────────┬───────────────────┬──────────┐
+// │   MODE    │    ASID     │       PPN         │  (0)     │
+// │ Sv39 = 8  │             │ 根页表的物理页号   │          │
+// └───────────┴─────────────┴───────────────────┴──────────┘
+// (((uint64)pagetable) >> 12）转成物理页号，或上stap的最高位的模式
 #define MAKE_SATP(pagetable) (SATP_SV39 | (((uint64)pagetable) >> 12))
 
 // Physical Memory Protection
@@ -201,6 +207,8 @@ w_pmpaddr0(uint64 x)
 
 // supervisor address translation and protection;
 // holds the address of the page table.
+// 把值 x 写进 satp 寄存器。satp 是 RISC-V 里决定"当前用哪张页表做地址翻译"的寄存器(S=Supervisor),所以写它 = 切换地址空间/页表
+
 static inline void 
 w_satp(uint64 x)
 {
@@ -329,16 +337,31 @@ static inline void
 sfence_vma()
 {
   // the zero, zero means flush all TLB entries.
+  // 刷新整个 TLB
   asm volatile("sfence.vma zero, zero");
 }
 
 
 #define PGSIZE 4096 // bytes per page
+
+// 页内偏移 12 位
 #define PGSHIFT 12  // bits of offset within a page
 
 #define PGROUNDUP(sz)  (((sz)+PGSIZE-1) & ~(PGSIZE-1))
 #define PGROUNDDOWN(a) (((a)) & ~(PGSIZE-1))
 
+// PTE 的位布局
+// RISC-V 的页表项（PTE）64 位：
+
+// text
+// 位:  63 ... 10 │ 9 │ 8 │ 7 │ 6 │ 5 │ 4 │ 3 │ 2 │ 1 │ 0
+//      物理页号  │RSV│RSV│ D │ A │ G │ U │ X │ W │ R │ V
+               
+// V (Valid)    = 位 0 有效位
+// R (Read)     = 位 1
+// W (Write)    = 位 2
+// X (Execute)  = 位 3
+// U (User)     = 位 4
 #define PTE_V (1L << 0) // valid
 #define PTE_R (1L << 1)
 #define PTE_W (1L << 2)
@@ -346,6 +369,7 @@ sfence_vma()
 #define PTE_U (1L << 4) // 1 -> user can access
 
 // shift a physical address to the right place for a PTE.
+// 拿到物理地址的物理页号
 #define PA2PTE(pa) ((((uint64)pa) >> 12) << 10)
 
 #define PTE2PA(pte) (((pte) >> 10) << 12)
@@ -365,3 +389,4 @@ sfence_vma()
 
 typedef uint64 pte_t;
 typedef uint64 *pagetable_t; // 512 PTEs
+// 页表 512个表项，每个表项8字节， 512*8=4096一页表

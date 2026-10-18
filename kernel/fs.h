@@ -39,9 +39,13 @@ struct dinode {
 };
 
 // Inodes per block.
+// 每块多少个inode
 #define IPB           (BSIZE / sizeof(struct dinode))
 
 // Block containing inode i
+// 根据 inode 号 i，算出它在磁盘上的块号
+// sb.inodestart	inode 区起始块号
+// (i)/IPB是第几个磁盘块 + inode的磁盘块号起点等于真正这个inode位于的磁盘块号
 #define IBLOCK(i, sb)     ((i) / IPB + sb.inodestart)
 
 // Bitmap bits per block

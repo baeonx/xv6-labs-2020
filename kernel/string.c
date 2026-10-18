@@ -88,7 +88,7 @@ safestrcpy(char *s, const char *t, int n)
     return os;
   while(--n > 0 && (*s++ = *t++) != 0)
     ;
-  *s = 0;
+  *s = 0; // 保证末尾是 '\0'
   return os;
 }
 

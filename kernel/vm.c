@@ -9,6 +9,8 @@
 /*
  * the kernel's page table.
  */
+// 内核页表
+// 因为 xv6 内核是恒等映射(虚拟地址 = 物理地址),所以这个指针的值 既是虚拟地址、也是物理地址
 pagetable_t kernel_pagetable;
 
 extern char etext[];  // kernel.ld sets this to end of kernel code.
@@ -49,10 +51,13 @@ kvminit()
 
 // Switch h/w page table register to the kernel's page table,
 // and enable paging.
+// 但 satp 只需要存"根页"的物理页号,硬件会自己从根开始逐级 walk 三级找到最终的物理页。所以你看到:
 void
 kvminithart()
 {
+  // 因为 xv6 内核是恒等映射(虚拟地址 = 物理地址),所以这个指针的值 既是虚拟地址、也是物理地址
   w_satp(MAKE_SATP(kernel_pagetable));
+  // 清空tlb
   sfence_vma();
 }
 
@@ -68,23 +73,44 @@ kvminithart()
 //   21..29 -- 9 bits of level-1 index.
 //   12..20 -- 9 bits of level-0 index.
 //    0..11 -- 12 bits of byte offset within the page.
+// walk(pagetable, a, 1)
+// a = PGROUNDDOWN(va); 
 pte_t *
 walk(pagetable_t pagetable, uint64 va, int alloc)
 {
+  // MAXVA用户虚拟地址最大值
   if(va >= MAXVA)
     panic("walk");
-
+  // level从 2 到 1 两级中间页表
   for(int level = 2; level > 0; level--) {
+    // level=2的时候 va左移12+2*9=30, 留出最高9位为一级索引
+    // 4096B 512个页表项
+    // TRAMPOLINE = 0x3FFFFFF000 高9位全1 为2^9-1=511
+    // 得到第511个页表项的地址
     pte_t *pte = &pagetable[PX(level, va)];
+    // 查看第0位是否，有效位，看看物理地址是否存在
     if(*pte & PTE_V) {
+      // 存在的话拿出物理地址
+      // PTE2PA(*pte)：从 PTE 取出物理地址（下一级页表的地址）
+      // 左移10位跳过低位（有效位那些）再右移12位，为虚拟地址的最后12位物理地址腾空间
       pagetable = (pagetable_t)PTE2PA(*pte);
     } else {
+      // 调用者不允许创建（alloc=0）→ 返回 0（失败）
+      // 如果分配失败返回0
+      // 将原来的页表pagetable覆盖成新的页表物理地址
       if(!alloc || (pagetable = (pde_t*)kalloc()) == 0)
         return 0;
       memset(pagetable, 0, PGSIZE);
+      // kalloc返回的正式新页的物理地址
+      // 去掉物理偏移地址，转成虚拟地址
+      // 把该表项存入新页的虚拟地址
+      // pagetable物理地址 pa：  [物理页号][页内偏移 12位]
+      // PTE：  [物理页号][权限 10位]
       *pte = PA2PTE(pagetable) | PTE_V;
     }
   }
+
+  // 左移12位&最低位9位得到，三级页表的511的表项
   return &pagetable[PX(0, va)];
 }
 
@@ -117,6 +143,7 @@ walkaddr(pagetable_t pagetable, uint64 va)
 void
 kvmmap(uint64 va, uint64 pa, uint64 sz, int perm)
 {
+  // kernel_pagetable全局的第一级页表
   if(mappages(kernel_pagetable, va, sz, pa, perm) != 0)
     panic("kvmmap");
 }
@@ -148,16 +175,28 @@ kvmpa(uint64 va)
 int
 mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
 {
+  // mappages(pagetable, TRAMPOLINE, PGSIZE,
+  //             (uint64)trampoline, PTE_R | PTE_X)
+  // TRAMPOLINE是256GB-1页的初始地址
   uint64 a, last;
   pte_t *pte;
-
+  // 把 a 的低 12 位清零，也就是向下对齐到 4096 的倍数
+  // TRAMPOLINE是256GB-1页的初始地址
   a = PGROUNDDOWN(va);
+  // 256GB那会的地址
   last = PGROUNDDOWN(va + size - 1);
+  // 虚拟地址 va 开始的那一页 映射 物理地址 trampoline 开始的那一页。
   for(;;){
+    // 通过页表搜寻建立一个三级页表的511项的pte
+    // pte是页表项的地址，如果没有这个地址，说明分配页表页失败（内存耗尽）
     if((pte = walk(pagetable, a, 1)) == 0)
       return -1;
+    // 如果该页表项存在且页表项的有效位也对，说明找到的页表不对
+    // 这个虚拟地址是否已经映射过了
     if(*pte & PTE_V)
       panic("remap");
+    // 拿到物理页号，设置后9位为perm,若perm为PTE_R | PTE_X说明可读可写
+    // 还设置有效位为1
     *pte = PA2PTE(pa) | perm | PTE_V;
     if(a == last)
       break;
@@ -170,6 +209,7 @@ mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
 // Remove npages of mappings starting from va. va must be
 // page-aligned. The mappings must exist.
 // Optionally free the physical memory.
+// uvmunmap(pagetable, TRAMPOLINE, 1, 0);
 void
 uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
 {
@@ -180,16 +220,21 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
     panic("uvmunmap: not aligned");
 
   for(a = va; a < va + npages*PGSIZE; a += PGSIZE){
+    // 找到pte, alloc=0：因为要解除映射，页表应该已经存在，不需要创建。
     if((pte = walk(pagetable, a, 0)) == 0)
       panic("uvmunmap: walk");
+    // 要解除的映射应该存在
     if((*pte & PTE_V) == 0)
       panic("uvmunmap: not mapped");
+    // PTE_FLAGS(*pte)：取出 PTE 的权限位 只有 V，没有 R/W/X，说明返回的不是叶子节点
     if(PTE_FLAGS(*pte) == PTE_V)
       panic("uvmunmap: not a leaf");
+    // do_free = 1：释放物理页
     if(do_free){
       uint64 pa = PTE2PA(*pte);
       kfree((void*)pa);
     }
+    // 把 PTE 设为 0
     *pte = 0;
   }
 }
@@ -199,10 +244,12 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
 pagetable_t
 uvmcreate()
 {
+  // 用 uint64 * 指向页表开头，就能用 pt[i] 方便地访问第 i 个页表项
   pagetable_t pagetable;
   pagetable = (pagetable_t) kalloc();
   if(pagetable == 0)
     return 0;
+  // 页表制空
   memset(pagetable, 0, PGSIZE);
   return pagetable;
 }
@@ -213,6 +260,7 @@ uvmcreate()
 void
 uvminit(pagetable_t pagetable, uchar *src, uint sz)
 {
+  // 分配一页物理内存,把 initcode 拷进去,然后映射到用户虚拟地址 0
   char *mem;
 
   if(sz >= PGSIZE)
@@ -220,6 +268,8 @@ uvminit(pagetable_t pagetable, uchar *src, uint sz)
   mem = kalloc();
   memset(mem, 0, PGSIZE);
   mappages(pagetable, 0, PGSIZE, (uint64)mem, PTE_W|PTE_R|PTE_X|PTE_U);
+  // mappages已经把联系建好了，memmove，把initcode放进去
+  // initcode 是一段极小的汇编程序,编在内核镜像里
   memmove(mem, src, sz);
 }
 
@@ -271,21 +321,31 @@ uvmdealloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz)
 
 // Recursively free page-table pages.
 // All leaf mappings must already have been removed.
+// freewalk 的职责是"释放页表页"
+// freewalk 就是"暴力递归"整棵页表树，把每一页页表页都 kfree 掉
 void
 freewalk(pagetable_t pagetable)
 {
   // there are 2^9 = 512 PTEs in a page table.
   for(int i = 0; i < 512; i++){
     pte_t pte = pagetable[i];
+    // 含义：PTE 有效，但没有读写执行权限，说明它指向下一级页表（不是叶子映射）
+    // RISC-V 的约定：中间级 PTE 只设 V，不设 R/W/X说明是中间叶子节点
     if((pte & PTE_V) && (pte & (PTE_R|PTE_W|PTE_X)) == 0){
       // this PTE points to a lower-level page table.
+      // 得到该二级页表的物理页地址
       uint64 child = PTE2PA(pte);
       freewalk((pagetable_t)child);
+      // 清空该页的第i项目的pte
       pagetable[i] = 0;
+      // 如果 PTE 有效，且有 R/W/X（是叶子映射），panic。
+      // 因为调用者应该先清除所有叶子映射，再调 freewalk。
     } else if(pte & PTE_V){
       panic("freewalk: leaf");
     }
   }
+  // kfree 释放的是该页表占用的"一整页物理内存"
+  // 释放页表本身的页
   kfree((void*)pagetable);
 }
 
@@ -294,6 +354,10 @@ freewalk(pagetable_t pagetable)
 void
 uvmfree(pagetable_t pagetable, uint64 sz)
 {
+  // sz = 0：没有用户内存，跳过 uvmunmap，直接 freewalk
+  // PGROUNDUP(sz)：把 sz 向上对齐到页边界/PGSIZE得到页数
+  // sz = 进程用户内存的大小（字节数）
+  // sz > 0一次调用 uvmfree，完成两步:uvmunmap清叶子，freewalk清页表页
   if(sz > 0)
     uvmunmap(pagetable, 0, PGROUNDUP(sz)/PGSIZE, 1);
   freewalk(pagetable);
